@@ -262,7 +262,7 @@ def _(config, fetch_json, pd, require):
             "Unexpected SIDRA period or dimensions.",
         )
 
-        values  = frame["V"] .replace  ("-", "0")
+        values  = frame["V"] .replace  ("-", "0" )
         invalid = ~values.str.fullmatch(r"[0-9]+", na=False)
 
         require(
@@ -280,10 +280,10 @@ def _(config, fetch_json, pd, require):
 def _(pd):
     def municipal_frame(raw):
         return pd.DataFrame({
-            "codigo_municipio_ibge" : raw["D1C"],
-            "codigo_sexo"           : raw["D4C"],
-            "codigo_faixa_etaria"   : raw["D5C"],
-            "populacao_residente"   : raw["V"  ],
+            "ibge_municipality_code" : raw["D1C"],
+            "sex_code"               : raw["D4C"],
+            "age_group_code"         : raw["D5C"],
+            "resident_population"    : raw["V"  ],
         })
 
     return (municipal_frame,)
@@ -307,7 +307,7 @@ def _(config, municipal_frame, query_url, read_sidra, require):
         )
     )
 
-    require(municipal_totals["codigo_municipio_ibge"].is_unique, "Duplicate Census territory codes.")
+    require(municipal_totals["ibge_municipality_code"].is_unique, "Duplicate Census territory codes.")
 
     batch_size = config.safe_value_limit // (len(municipal_totals) * len(config.sexes))
 
@@ -336,12 +336,12 @@ def _(age_batches, batch_urls, config, municipal_frame, pd, read_sidra):
 
     population = population.sort_values(
         [
-            "codigo_municipio_ibge",
-            "codigo_faixa_etaria"  ,
-            "codigo_sexo"          ,
+            "ibge_municipality_code",
+            "age_group_code"        ,
+            "sex_code"              ,
         ],
 
-        key         =lambda column: column.map(_age_order) if column.name == "codigo_faixa_etaria" else column,
+        key         =lambda column: column.map(_age_order) if column.name == "age_group_code" else column,
         kind        ="stable",
         ignore_index=True    ,
     )
@@ -380,31 +380,31 @@ def _(mo):
 
 @app.cell
 def _(config, municipal_totals, national_totals, pd, population, require):
-    _code = "codigo_municipio_ibge"
+    _code = "ibge_municipality_code"
     _key  = [
         _code,
 
-        "codigo_sexo"        ,
-        "codigo_faixa_etaria",
+        "sex_code"      ,
+        "age_group_code",
     ]
 
     _by_municipality = population      .groupby  (_code)
     _control         = municipal_totals.set_index(_code)
 
-    _sums   = _by_municipality                 ["populacao_residente"].sum().to_dict()
-    _by_sex = population.groupby("codigo_sexo")["populacao_residente"].sum().to_dict()
+    _sums   = _by_municipality              ["resident_population"].sum().to_dict()
+    _by_sex = population.groupby("sex_code")["resident_population"].sum().to_dict()
 
     _checks = {
         "Municipality codes contain seven digits"                    : population[_code].str.fullmatch(r"[0-9]{7}", na=False).all(),
         "Municipality-sex-age primary key is unique"                 : not population.duplicated(_key).any()                       ,
         "Municipality codes match the Census territorial control"    : set(population[_code]) == set(_control.index)               ,
-        "Municipal age-sex sums match the official municipal totals" : _sums == _control["populacao_residente"].to_dict()          ,
+        "Municipal age-sex sums match the official municipal totals" : _sums == _control["resident_population"].to_dict()          ,
 
         "Exactly 42 records per municipality" : _by_municipality.size().eq(len(config.sexes) * len(config.ages)).all(),
 
         "Municipal sums match the national total and both sex totals" : (
             _by_sex == {code: national_totals[code] for code in config.sexes}                 and
-            int(population["populacao_residente"].sum()) == national_totals[config.sex_total]
+            int(population["resident_population"].sum()) == national_totals[config.sex_total]
         ),
     }
 
@@ -415,7 +415,7 @@ def _(config, municipal_totals, national_totals, pd, population, require):
     validated_summary = {
         "municipalities"           : len(_control  ),
         "records"                  : len(population),
-        "population_total"         : int(population["populacao_residente"].sum())           ,
+        "population_total"         : int(population["resident_population"].sum())           ,
         "official_national_by_sex" : {code : national_totals[code] for code in config.sexes},
     }
     return validated_summary, validation_results
@@ -490,7 +490,7 @@ def _(
 
 @app.cell
 def _(ExitStack, config, json, metadata, mo, population, staged_path):
-    csv_path      = config.root / "data" / "municipal_population_2022.csv"
+    csv_path      = config.root / "data"     / "municipal_population_2022.csv"
     metadata_path = config.root / "metadata" / "municipal_population.json"
 
     with ExitStack() as _stack:

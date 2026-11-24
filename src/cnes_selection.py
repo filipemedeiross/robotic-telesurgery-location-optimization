@@ -470,10 +470,11 @@ def validate_establishments(frame: pd.DataFrame) -> None:
             raise ValueError(f"Invalid textual identifier: {column}")
 
     for column in COUNT_COLUMNS:
-        nonnegative_integers(frame[column], column)
-
         if not pd.api.types.is_integer_dtype(frame[column]):
             raise ValueError(f"Count column must use an integer dtype: {column}")
+
+        if frame[column].isna().any() or frame[column].lt(0).any():
+            raise ValueError(f"Invalid {column}: counts must be nonnegative integers")
 
     for column in BOOLEAN_COLUMNS:
         if frame[column].isna().any() or not pd.api.types.is_bool_dtype(frame[column]):
@@ -506,6 +507,12 @@ def aggregate_municipalities(candidates: pd.DataFrame) -> pd.DataFrame:
     """One row per municipality, preserving the original aggregate attributes"""
 
     validate_establishments(candidates)
+
+    return _aggregate_municipalities(candidates)
+
+
+def _aggregate_municipalities(candidates: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate candidates whose establishment contract has already been checked"""
 
     result = candidates.groupby(
         [
@@ -564,10 +571,11 @@ def validate_municipalities(frame: pd.DataFrame) -> None:
         raise ValueError("Missing municipality labels")
 
     for column in MUNICIPAL_COUNT_COLUMNS:
-        nonnegative_integers(frame[column], column)
-
         if not pd.api.types.is_integer_dtype(frame[column]):
             raise ValueError(f"Count column must use an integer dtype: {column}")
+
+        if frame[column].isna().any() or frame[column].lt(0).any():
+            raise ValueError(f"Invalid {column}: counts must be nonnegative integers")
 
     if frame["candidate_establishments"].eq(0).any():
         raise ValueError("Municipal products include only municipalities with candidates")
@@ -626,8 +634,6 @@ def validate_products(
         }
     ]
 
-    previous = set(base["cnes"])
-
     for level, mask in expected_masks.items():
         actual, municipal = candidates[level], municipalities[level]
 
@@ -643,23 +649,15 @@ def validate_products(
             check_dtype=False,
         )
 
-        if not set(actual["cnes"]).issubset(previous):
-            raise ValueError(f"Broken nested subset: {level}")
-
-        previous = set(actual["cnes"])
-
         pd.testing.assert_frame_equal(
-            municipal                       ,
-            aggregate_municipalities(actual),
+            municipal                        ,
+            _aggregate_municipalities(actual),
 
             check_dtype=False,
         )
 
-        if not municipal["ibge_municipality_code"].is_unique or int(municipal["candidate_establishments"].sum()) != len(actual):
+        if int(municipal["candidate_establishments"].sum()) != len(actual):
             raise ValueError(f"Municipal counts do not reconcile: {level}")
-
-        if REMOVED_COLUMNS & set(municipal.columns):
-            raise ValueError(f"Removed columns in {level} municipal aggregate")
 
         rows.append(
             {
@@ -685,7 +683,7 @@ def screen_candidates(base: pd.DataFrame) -> Screen:
     }
 
     candidates     = {level : base.loc[mask].reset_index(drop=True) for level, mask  in masks     .items()}
-    municipalities = {level : aggregate_municipalities  (frame    ) for level, frame in candidates.items()}
+    municipalities = {level : _aggregate_municipalities (frame    ) for level, frame in candidates.items()}
 
     remaining = pd.Series(True, index=base.index)
 

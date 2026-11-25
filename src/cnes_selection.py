@@ -666,14 +666,28 @@ def validate_products(
 
     validate_establishments(base)
 
+    if set(candidates) != set(LIST_DEFINITIONS) or set(municipalities) != set(LIST_DEFINITIONS):
+        raise ValueError("Expected exactly broad, candidates and restricted products")
+
+    for level in LIST_DEFINITIONS:
+        validate_establishments(candidates    [level])
+        validate_municipalities(municipalities[level])
+
+    return _validate_product_relations(base, candidates, municipalities)
+
+
+def _validate_product_relations(
+    base          : pd.DataFrame,
+    candidates    : dict[str, pd.DataFrame],
+    municipalities: dict[str, pd.DataFrame],
+) -> pd.DataFrame:
+    """Check product relations after all individual table contracts are validated"""
+
     expected_masks = {
         "broad"      : base["is_legacy_hospital_type"            ],
         "candidates" : base["is_legacy_hospital_type"            ] & base["has_hospital_high_complexity"],
         "restricted" : base["passes_cnes_telesurgery_host_screen"],
     }
-
-    if set(candidates) != set(expected_masks) or set(municipalities) != set(expected_masks):
-        raise ValueError("Expected exactly broad, candidates and restricted products")
 
     rows = [
         {
@@ -684,9 +698,6 @@ def validate_products(
 
     for level, mask in expected_masks.items():
         actual, municipal = candidates[level], municipalities[level]
-
-        validate_establishments(actual   )
-        validate_municipalities(municipal)
 
         expected = base.loc[mask].reset_index(drop=True)
 
@@ -733,6 +744,9 @@ def screen_candidates(base: pd.DataFrame) -> Screen:
     candidates     = {level : base.loc[mask].reset_index(drop=True) for level, mask  in masks     .items()}
     municipalities = {level : _aggregate_municipalities (frame    ) for level, frame in candidates.items()}
 
+    for frame in municipalities.values():
+        validate_municipalities(frame)
+
     remaining = pd.Series(True, index=base.index)
 
     funnel = [
@@ -759,9 +773,10 @@ def screen_candidates(base: pd.DataFrame) -> Screen:
         candidates    ,
         municipalities,
 
-        type_review      (base  ),
-        pd.DataFrame     (funnel),
-        validate_products(base, candidates, municipalities),
+        type_review (base  ),
+        pd.DataFrame(funnel),
+
+        _validate_product_relations(base, candidates, municipalities),
     )
 
 

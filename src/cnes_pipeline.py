@@ -32,7 +32,9 @@ from .cnes_selection import (
     read_establishments_csv,
     read_municipalities_csv,
     screen_candidates      ,
-    validate_products      ,
+
+    validate_products          ,
+    _validate_product_relations,
 )
 
 
@@ -155,10 +157,7 @@ def build_metadata(root: Path, screen: Screen) -> dict:
             ],
 
             "adult_icu_bed_codes" : [
-                "61",
-                "74",
-                "75",
-                "76",
+                "61", "74", "75", "76"
             ],
 
             "hospital_service_codes" : {
@@ -215,18 +214,24 @@ def build_metadata(root: Path, screen: Screen) -> dict:
 
 
 def publish_products(root: Path, screen: Screen, provenance: dict, metadata: dict) -> None:
-    """Validate all staged CSV round trips before publishing any processed file"""
+    """Validate external products and their staged CSV round trips before publishing"""
 
-    paths = product_paths(root)
-
-    manifest_path = paths["base"].parent / "enriched_manifest.json"
-
-    _assert_no_parquet(root)
     validate_products (
         screen.all_establishments,
         screen.candidates        ,
         screen.municipalities    ,
     )
+
+    _publish_products(root, screen, provenance, metadata)
+
+
+def _publish_products(root: Path, screen: Screen, provenance: dict, metadata: dict) -> None:
+    """Publish validated products after checking all staged CSV round trips"""
+
+    paths         = product_paths(root)
+    manifest_path = paths["base"].parent / "enriched_manifest.json"
+
+    _assert_no_parquet(root)
 
     with ExitStack() as stack:
         staged = {}
@@ -248,7 +253,7 @@ def publish_products(root: Path, screen: Screen, provenance: dict, metadata: dic
         candidates     = {level: read_establishments_csv(staged[path]) for level, path in paths["establishments"].items()}
         municipalities = {level: read_municipalities_csv(staged[path]) for level, path in paths["municipalities"].items()}
 
-        validate_products(base, candidates, municipalities)
+        _validate_product_relations(base, candidates, municipalities)
 
         provenance = {
             **provenance,
@@ -308,7 +313,7 @@ def run_screen(root: Path, timeout: float = 90) -> tuple[Screen, dict]:
 
     metadata = build_metadata(root, screen)
 
-    publish_products(
+    _publish_products(
         root      ,
         screen    ,
         provenance,

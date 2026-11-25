@@ -28,17 +28,21 @@ from .cnes_selection import (
 
     Screen,
 
-    build_establishments   ,
-    read_establishments_csv,
-    read_municipalities_csv,
-    screen_candidates      ,
+    build_establishments                ,
+    consolidate_candidate_establishments,
+    read_candidate_establishments_csv   ,
+    read_establishments_csv             ,
+    read_municipalities_csv             ,
+    screen_candidates                   ,
 
-    validate_products          ,
-    _validate_product_relations,
+    validate_candidate_establishments,
+    validate_products                ,
+    _validate_product_relations      ,
 )
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION      = 2
+BASE_SCHEMA_VERSION = 1
 
 REFERENCES = {
     "type_labels"          : "https://tabnet.datasus.gov.br/cgi/cnes/tipo_estabelecimento.htm"                             ,
@@ -47,12 +51,14 @@ REFERENCES = {
 
 
 def product_paths(root: Path) -> dict:
-    paths = {"establishments": {}, "municipalities": {}}
+    paths = {
+        "establishments" : root / "data" / f"cnes_telesurgery_host_candidates_brazil_{COMPETENCE}.csv",
+        "municipalities" : {},
+    }
 
     for level in LIST_DEFINITIONS:
         suffix = "" if level == "candidates" else f"_{level}"
 
-        paths["establishments"][level] = root / "data" / f"cnes_telesurgery_host_candidates{suffix}_brazil_{COMPETENCE}.csv"
         paths["municipalities"][level] = root / "data" / f"cnes_telesurgery_candidate_municipalities{suffix}_brazil_{COMPETENCE}.csv"
 
     paths["base"    ] = root / ".cache"   / "cnes" / COMPETENCE / f"cnes_establishments_brazil_{COMPETENCE}.csv"
@@ -76,7 +82,7 @@ def load_base(root: Path, timeout: float = 90) -> tuple[pd.DataFrame, dict]:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
         if (
-            manifest.get("schema_version"  ) == SCHEMA_VERSION        and
+            manifest.get("schema_version"  ) == BASE_SCHEMA_VERSION   and
             manifest.get("competence"      ) == COMPETENCE            and
             manifest.get("selection_sha256") == _selection_digest()   and
             manifest.get("base_sha256"     ) == sha256(paths["base"])
@@ -108,8 +114,8 @@ def load_base(root: Path, timeout: float = 90) -> tuple[pd.DataFrame, dict]:
         raise ValueError("CNES establishment base does not cover the 27 UFs")
 
     manifest.update(
-        schema_version        =SCHEMA_VERSION,
-        competence            =COMPETENCE    ,
+        schema_version        =BASE_SCHEMA_VERSION,
+        competence            =COMPETENCE         ,
         selection_sha256      =_selection_digest(),
         municipality_reference=municipal_source   ,
     )
@@ -119,6 +125,13 @@ def load_base(root: Path, timeout: float = 90) -> tuple[pd.DataFrame, dict]:
 
 def build_metadata(root: Path, screen: Screen) -> dict:
     paths = product_paths(root)
+
+    published_columns = set(
+        consolidate_candidate_establishments(screen.candidates).columns
+    )
+
+    for frame in screen.municipalities.values():
+        published_columns.update(frame.columns)
 
     return {
         "schema_version" : SCHEMA_VERSION,
@@ -130,6 +143,13 @@ def build_metadata(root: Path, screen: Screen) -> dict:
 
         "criteria" : {
             "lists" : LIST_DEFINITIONS,
+
+            "establishment_scenarios" : {
+                "broad"      : "Todas as linhas do arquivo único de estabelecimentos."            ,
+                "candidates" : "is_standard_candidate=True; inclui os estabelecimentos restritos.",
+                "restricted" : "is_restricted_candidate=True; implica is_standard_candidate=True.",
+                "broad_only" : "is_standard_candidate=False e is_restricted_candidate=False."     ,
+            },
 
             "restricted_observable_checks" : [
                 {
@@ -157,7 +177,11 @@ def build_metadata(root: Path, screen: Screen) -> dict:
             ],
         },
 
-        "column_dictionary" : COLUMN_DICTIONARY,
+        "column_dictionary" : {
+            column : description
+            for column, description in COLUMN_DICTIONARY.items()
+            if  column in published_columns
+        },
 
         "legacy_establishment_type_labels" : {
             code : LEGACY_TYPE_LABELS[code]
@@ -180,15 +204,11 @@ def build_metadata(root: Path, screen: Screen) -> dict:
         },
 
         "outputs": {
-            **{
-                kind : {
-                    level : path.relative_to(root).as_posix()
-                    for level, path in paths[kind].items   ()
-                }
-                for kind in (
-                    "establishments",
-                    "municipalities",
-                )
+            "establishments" : paths["establishments"].relative_to(root).as_posix(),
+
+            "municipalities" : {
+                level : path.relative_to(root).as_posix()
+                for level, path in paths["municipalities"].items()
             },
 
             "report" : "reports/cnes_candidates.html",
@@ -214,13 +234,19 @@ def _publish_products(root: Path, screen: Screen, provenance: dict, metadata: di
     paths         = product_paths(root)
     manifest_path = paths["base"].parent / "enriched_manifest.json"
 
+    establishments = consolidate_candidate_establishments(
+        screen.candidates
+    )
+
+    validate_candidate_establishments(establishments)
+
     with ExitStack() as stack:
         staged = {}
 
         for destination, frame in [
-            (paths["base"], screen.all_establishments),
+            (paths["base"          ], screen.all_establishments),
+            (paths["establishments"],            establishments),
 
-            *((paths["establishments"][level], frame) for level, frame in screen.candidates    .items()),
             *((paths["municipalities"][level], frame) for level, frame in screen.municipalities.items()),
         ]:
             temporary = stack.enter_context(staged_path(destination))
@@ -229,12 +255,17 @@ def _publish_products(root: Path, screen: Screen, provenance: dict, metadata: di
 
             staged[destination] = temporary
 
-        base = read_establishments_csv(staged[paths["base"]])
+        base     = read_establishments_csv          (staged[paths["base"          ]])
+        exported = read_candidate_establishments_csv(staged[paths["establishments"]])
 
-        candidates     = {level: read_establishments_csv(staged[path]) for level, path in paths["establishments"].items()}
-        municipalities = {level: read_municipalities_csv(staged[path]) for level, path in paths["municipalities"].items()}
+        municipalities = {
+            level : read_municipalities_csv(staged[path])
+            for level, path in paths["municipalities"].items()
+        }
 
-        _validate_product_relations(base, candidates, municipalities)
+        pd.testing.assert_frame_equal(exported, establishments, check_dtype=False)
+
+        _validate_product_relations(base, screen.candidates, municipalities)
 
         provenance = {
             **provenance,
@@ -263,6 +294,13 @@ def _publish_products(root: Path, screen: Screen, provenance: dict, metadata: di
 
         for destination, temporary in staged.items():
             temporary.replace(destination)
+
+    for level in ("broad", "restricted"):
+        obsolete = (
+            root / "data" / f"cnes_telesurgery_host_candidates_{level}_brazil_{COMPETENCE}.csv"
+        )
+
+        obsolete.unlink(missing_ok=True)
 
 
 def run_screen(root: Path, timeout: float = 90) -> tuple[Screen, dict]:

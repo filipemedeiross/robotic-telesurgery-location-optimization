@@ -197,6 +197,20 @@ REMOVED_COLUMNS = frozenset({
     "eligibility_basis"             ,
     "requires_site_validation"      ,
 })
+ESTABLISHMENT_REMOVED_COLUMNS = frozenset({
+    "municipality"           ,
+    "state"                  ,
+    "is_legacy_hospital_type",
+    "has_surgical_beds"      ,
+    "has_operating_room"     ,
+    "has_recovery_room"      ,
+    "has_adult_icu"          ,
+})
+
+CANDIDATE_BOOLEAN_COLUMNS = (
+    "is_standard_candidate"  ,
+    "is_restricted_candidate",
+)
 COUNT_COLUMNS = (
     "surgical_beds"  ,
     "operating_rooms",
@@ -229,6 +243,16 @@ BOOLEAN_COLUMNS = (
     "passes_cnes_telesurgery_host_screen",
 )
 
+EXPORTED_BOOLEAN_COLUMNS = (
+    *(
+        column
+        for column     in BOOLEAN_COLUMNS
+        if  column not in ESTABLISHMENT_REMOVED_COLUMNS
+    ),
+
+    *CANDIDATE_BOOLEAN_COLUMNS,
+)
+
 COLUMN_DICTIONARY = {
     "cnes"                   : "Identificador textual do estabelecimento CNES, 7 dígitos."                                 ,
     "ibge_municipality_code" : "Código municipal IBGE textual, 7 dígitos, correspondido pelo prefixo DATASUS de 6 dígitos.",
@@ -251,6 +275,8 @@ COLUMN_DICTIONARY = {
     "has_recovery_room"                   : "recovery_rooms > 0; seleção do restrito."                                    ,
     "has_adult_icu"                       : "adult_icu_beds > 0; seleção do restrito."                                    ,
     "passes_cnes_telesurgery_host_screen" : "Conjunção dos 12 critérios observáveis; não comprova aptidão operacional."   ,
+    "is_standard_candidate"               : "Pertence ao cenário padrão; inclui todos os estabelecimentos do restrito."   ,
+    "is_restricted_candidate"             : "Pertence ao cenário restrito; implica is_standard_candidate=True."           ,
     "candidate_establishments"            : "Quantidade de estabelecimentos distintos da respectiva lista no município."  ,
     "sus_linked_establishments"           : "Quantidade dos candidatos do município com VINC_SUS=1; informativo."         ,
 }
@@ -492,18 +518,16 @@ def build_establishments(
     return result
 
 
-def validate_establishments(frame: pd.DataFrame) -> None:
-    """Enforce exported identifiers, flags, counts and municipal consistency"""
+def _validate_establishment_attributes(frame: pd.DataFrame, boolean_columns: tuple[str, ...]) -> None:
+    """Check attributes shared by the internal base and consolidated export"""
 
     required = {
         "cnes"                          ,
         "ibge_municipality_code"        ,
-        "municipality"                  ,
-        "state"                         ,
         "legacy_establishment_type_code",
 
         *COUNT_COLUMNS  ,
-        *BOOLEAN_COLUMNS,
+        *boolean_columns,
     }
     if required - set(frame.columns):
         raise ValueError(f"Missing establishment columns: {sorted(required - set(frame.columns))}")
@@ -533,9 +557,18 @@ def validate_establishments(frame: pd.DataFrame) -> None:
         if frame[column].isna().any() or frame[column].lt(0).any():
             raise ValueError(f"Invalid {column}: counts must be nonnegative integers")
 
-    for column in BOOLEAN_COLUMNS:
+    for column in boolean_columns:
         if frame[column].isna().any() or not pd.api.types.is_bool_dtype(frame[column]):
             raise ValueError(f"Flag column must be boolean without missing values: {column}")
+
+
+def validate_establishments(frame: pd.DataFrame) -> None:
+    """Enforce enriched base identifiers, flags, counts and municipal consistency"""
+
+    _validate_establishment_attributes(frame, BOOLEAN_COLUMNS)
+
+    if {"municipality", "state"} - set(frame.columns):
+        raise ValueError("Missing establishment municipality or state")
 
     if not frame["state"].eq(frame["ibge_municipality_code"].str[:2].map(STATE_BY_PREFIX)).fillna(False).all():
         raise ValueError("Establishment state disagrees with the IBGE code")
@@ -550,6 +583,56 @@ def validate_establishments(frame: pd.DataFrame) -> None:
     for column, expected in _expected_flags(frame).items():
         if not frame[column].eq(expected).all():
             raise ValueError(f"Derived flag disagrees with recorded attributes: {column}")
+
+
+def validate_candidate_establishments(frame: pd.DataFrame) -> None:
+    """Enforce the compact broad-set export and cumulative scenario flags"""
+
+    _validate_establishment_attributes(frame, EXPORTED_BOOLEAN_COLUMNS)
+
+    forbidden = ESTABLISHMENT_REMOVED_COLUMNS & set(frame.columns)
+    if forbidden:
+        raise ValueError(f"Removed establishment columns cannot be exported: {sorted(forbidden)}")
+
+    expected = _expected_flags(frame)
+    if not expected["is_legacy_hospital_type"].all():
+        raise ValueError("Consolidated establishments must belong to the broad set")
+
+    expected.update({
+        "is_standard_candidate"   : frame   ["has_hospital_high_complexity"       ],
+        "is_restricted_candidate" : expected["passes_cnes_telesurgery_host_screen"],
+    })
+
+    for column in (*CANDIDATE_BOOLEAN_COLUMNS, "passes_cnes_telesurgery_host_screen"):
+        if not frame[column].eq(expected[column]).all():
+            raise ValueError(f"Candidate flag disagrees with recorded attributes: {column}")
+
+
+def consolidate_candidate_establishments(candidates: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Publish one row per broad CNES with standard and restricted membership"""
+
+    if set(candidates) != set(LIST_DEFINITIONS):
+        raise ValueError("Expected exactly broad, candidates and restricted lists")
+
+    for frame in candidates.values():
+        validate_establishments(frame)
+
+    identifiers = {
+        level : set(frame["cnes"])
+        for level, frame in candidates.items()
+    }
+
+    if not identifiers["restricted"] <= identifiers["candidates"] <= identifiers["broad"]:
+        raise ValueError("Candidate lists must be nested: restricted <= standard <= broad")
+
+    result = candidates["broad"].drop(columns=list(ESTABLISHMENT_REMOVED_COLUMNS)).copy()
+
+    for column, level in zip(CANDIDATE_BOOLEAN_COLUMNS, ("candidates", "restricted")):
+        result[column] = result["cnes"].isin(identifiers[level])
+
+    validate_candidate_establishments(result)
+
+    return result
 
 
 def _aggregate_municipalities(candidates: pd.DataFrame) -> pd.DataFrame:
@@ -773,12 +856,12 @@ def screen_candidates(base: pd.DataFrame) -> Screen:
     )
 
 
-def read_establishments_csv(path: Path) -> pd.DataFrame:
-    """Read processed CSV explicitly; reject malformed boolean/count values"""
+def _read_establishment_columns(path: Path, boolean_columns: tuple[str, ...]) -> pd.DataFrame:
+    """Read textual identifiers while rejecting malformed boolean/count values"""
 
     frame = pd.read_csv(path, dtype="string", keep_default_na=False)
 
-    for column in BOOLEAN_COLUMNS:
+    for column in boolean_columns:
         if column not in frame or not frame[column].isin(["True", "False"]).all():
             raise ValueError(f"Invalid or missing boolean column: {column}")
 
@@ -790,7 +873,25 @@ def read_establishments_csv(path: Path) -> pd.DataFrame:
 
         frame[column] = nonnegative_integers(frame[column], column)
 
+    return frame
+
+
+def read_establishments_csv(path: Path) -> pd.DataFrame:
+    """Read and validate the internal enriched establishment cache"""
+
+    frame = _read_establishment_columns(path, BOOLEAN_COLUMNS)
+
     validate_establishments(frame)
+
+    return frame
+
+
+def read_candidate_establishments_csv(path: Path) -> pd.DataFrame:
+    """Read the consolidated candidate CSV with cumulative boolean flags"""
+
+    frame = _read_establishment_columns(path, EXPORTED_BOOLEAN_COLUMNS)
+
+    validate_candidate_establishments(frame)
 
     return frame
 

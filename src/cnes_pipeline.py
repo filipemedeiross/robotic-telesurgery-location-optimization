@@ -21,21 +21,24 @@ from .cnes_acquisition import (
     validate_source_proof,
 )
 from .cnes_selection import (
-    COLUMN_DICTIONARY ,
-    ELIGIBILITY_CHECKS,
-    LEGACY_TYPE_LABELS,
-    LIST_DEFINITIONS  ,
+    COLUMN_DICTIONARY  ,
+    ELIGIBILITY_CHECKS ,
+    LEGACY_TYPE_LABELS ,
+    LIST_DEFINITIONS   ,
+    MUNICIPAL_SCENARIOS,
 
     Screen,
 
     build_establishments                ,
     consolidate_candidate_establishments,
+    consolidate_candidate_municipalities,
     read_candidate_establishments_csv   ,
+    read_candidate_municipalities_csv   ,
     read_establishments_csv             ,
-    read_municipalities_csv             ,
     screen_candidates                   ,
 
     validate_candidate_establishments,
+    validate_candidate_municipalities,
     validate_products                ,
     _validate_product_relations      ,
 )
@@ -52,14 +55,9 @@ REFERENCES = {
 
 def product_paths(root: Path) -> dict:
     paths = {
-        "establishments" : root / "data" / f"cnes_telesurgery_host_candidates_brazil_{COMPETENCE}.csv",
-        "municipalities" : {},
+        "establishments" : root / "data" / f"cnes_telesurgery_host_candidates_brazil_{COMPETENCE}.csv"         ,
+        "municipalities" : root / "data" / f"cnes_telesurgery_candidate_municipalities_brazil_{COMPETENCE}.csv",
     }
-
-    for level in LIST_DEFINITIONS:
-        suffix = "" if level == "candidates" else f"_{level}"
-
-        paths["municipalities"][level] = root / "data" / f"cnes_telesurgery_candidate_municipalities{suffix}_brazil_{COMPETENCE}.csv"
 
     paths["base"    ] = root / ".cache"   / "cnes" / COMPETENCE / f"cnes_establishments_brazil_{COMPETENCE}.csv"
     paths["metadata"] = root / "metadata" / "cnes_candidates.json"
@@ -127,11 +125,11 @@ def build_metadata(root: Path, screen: Screen) -> dict:
     paths = product_paths(root)
 
     published_columns = set(
-        consolidate_candidate_establishments(screen.candidates).columns
+        consolidate_candidate_establishments(screen.candidates    ).columns
     )
-
-    for frame in screen.municipalities.values():
-        published_columns.update(frame.columns)
+    published_columns.update(
+        consolidate_candidate_municipalities(screen.municipalities).columns
+    )
 
     return {
         "schema_version" : SCHEMA_VERSION,
@@ -149,6 +147,15 @@ def build_metadata(root: Path, screen: Screen) -> dict:
                 "candidates" : "is_standard_candidate=True; inclui os estabelecimentos restritos.",
                 "restricted" : "is_restricted_candidate=True; implica is_standard_candidate=True.",
                 "broad_only" : "is_standard_candidate=False e is_restricted_candidate=False."     ,
+            },
+
+            "municipality_scenarios" : {
+                "column" : "scenario",
+                "values" : {
+                    scenario : LIST_DEFINITIONS[level]
+                    for level, scenario in MUNICIPAL_SCENARIOS.items()
+                },
+                "rows" : "Uma linha por município e cenário com candidatos; combinações sem candidatos não são incluídas.",
             },
 
             "restricted_observable_checks" : [
@@ -205,11 +212,7 @@ def build_metadata(root: Path, screen: Screen) -> dict:
 
         "outputs": {
             "establishments" : paths["establishments"].relative_to(root).as_posix(),
-
-            "municipalities" : {
-                level : path.relative_to(root).as_posix()
-                for level, path in paths["municipalities"].items()
-            },
+            "municipalities" : paths["municipalities"].relative_to(root).as_posix(),
 
             "report" : "reports/cnes_candidates.html",
         },
@@ -234,11 +237,11 @@ def _publish_products(root: Path, screen: Screen, provenance: dict, metadata: di
     paths         = product_paths(root)
     manifest_path = paths["base"].parent / "enriched_manifest.json"
 
-    establishments = consolidate_candidate_establishments(
-        screen.candidates
-    )
+    establishments = consolidate_candidate_establishments(screen.candidates    )
+    municipalities = consolidate_candidate_municipalities(screen.municipalities)
 
     validate_candidate_establishments(establishments)
+    validate_candidate_municipalities(municipalities)
 
     with ExitStack() as stack:
         staged = {}
@@ -246,8 +249,7 @@ def _publish_products(root: Path, screen: Screen, provenance: dict, metadata: di
         for destination, frame in [
             (paths["base"          ], screen.all_establishments),
             (paths["establishments"],            establishments),
-
-            *((paths["municipalities"][level], frame) for level, frame in screen.municipalities.items()),
+            (paths["municipalities"],            municipalities),
         ]:
             temporary = stack.enter_context(staged_path(destination))
 
@@ -258,14 +260,23 @@ def _publish_products(root: Path, screen: Screen, provenance: dict, metadata: di
         base     = read_establishments_csv          (staged[paths["base"          ]])
         exported = read_candidate_establishments_csv(staged[paths["establishments"]])
 
-        municipalities = {
-            level : read_municipalities_csv(staged[path])
-            for level, path in paths["municipalities"].items()
+        exported_municipalities = read_candidate_municipalities_csv(staged[paths["municipalities"]])
+
+        municipalities_by_level = {
+            level : (
+                exported_municipalities.loc[
+                    exported_municipalities["scenario"].eq(scenario)
+                ]
+                .drop       (columns="scenario")
+                .reset_index(drop   =True      )
+            )
+            for level, scenario in MUNICIPAL_SCENARIOS.items()
         }
 
-        pd.testing.assert_frame_equal(exported, establishments, check_dtype=False)
+        pd.testing.assert_frame_equal(exported               , establishments, check_dtype=False)
+        pd.testing.assert_frame_equal(exported_municipalities, municipalities, check_dtype=False)
 
-        _validate_product_relations(base, screen.candidates, municipalities)
+        _validate_product_relations(base, screen.candidates, municipalities_by_level)
 
         provenance = {
             **provenance,
@@ -296,11 +307,12 @@ def _publish_products(root: Path, screen: Screen, provenance: dict, metadata: di
             temporary.replace(destination)
 
     for level in ("broad", "restricted"):
-        obsolete = (
-            root / "data" / f"cnes_telesurgery_host_candidates_{level}_brazil_{COMPETENCE}.csv"
-        )
+        for stem in ("host_candidates", "candidate_municipalities"):
+            obsolete = (
+                root / "data" / f"cnes_telesurgery_{stem}_{level}_brazil_{COMPETENCE}.csv"
+            )
 
-        obsolete.unlink(missing_ok=True)
+            obsolete.unlink(missing_ok=True)
 
 
 def run_screen(root: Path, timeout: float = 90) -> tuple[Screen, dict]:

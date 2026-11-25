@@ -185,6 +185,12 @@ LIST_DEFINITIONS = {
     "restricted" : "Conjunto padrão que satisfaz todos os critérios observáveis ST/LT/SR."      ,
 }
 
+MUNICIPAL_SCENARIOS = {
+    "broad"      : "broad"     ,
+    "candidates" : "standard"  ,
+    "restricted" : "restricted",
+}
+
 REMOVED_COLUMNS = frozenset({
     "datasus_municipality_code"     ,
     "competence"                    ,
@@ -258,6 +264,7 @@ COLUMN_DICTIONARY = {
     "ibge_municipality_code" : "Código municipal IBGE textual, 7 dígitos, correspondido pelo prefixo DATASUS de 6 dígitos.",
     "municipality"           : "Nome municipal na referência IBGE utilizada."                                              ,
     "state"                  : "Sigla da unidade da federação, consistente com o prefixo IBGE."                            ,
+    "scenario"               : "Cenário do agregado municipal: broad (amplo), standard (padrão) ou restricted (restrito)." ,
 
     "legacy_establishment_type_code"      : "Tipo legado TP_UNID, texto com 2 dígitos; descrições no dicionário de tipos.",
     "is_sus_linked"                       : "VINC_SUS=1; informativo, não elimina candidatos."                            ,
@@ -667,7 +674,7 @@ def _aggregate_municipalities(candidates: pd.DataFrame) -> pd.DataFrame:
 
 
 def validate_municipalities(frame: pd.DataFrame) -> None:
-    """Enforce the municipal CSV contract independently of candidate rows"""
+    """Enforce municipal aggregates for a single candidate scenario"""
 
     required = {
         "ibge_municipality_code",
@@ -706,6 +713,82 @@ def validate_municipalities(frame: pd.DataFrame) -> None:
 
     if frame["sus_linked_establishments"].gt(frame["candidate_establishments"]).any():
         raise ValueError("SUS-linked establishments exceed candidate establishments")
+
+
+def consolidate_candidate_municipalities(municipalities: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Stack existing municipality/scenario pairs without filling absent combinations"""
+
+    if set(municipalities) != set(MUNICIPAL_SCENARIOS):
+        raise ValueError("Expected exactly broad, candidates and restricted municipal aggregates")
+
+    for frame in municipalities.values():
+        validate_municipalities(frame)
+
+    result = pd.concat(
+        [
+            municipalities[level].assign(scenario=scenario)
+            for level, scenario in MUNICIPAL_SCENARIOS.items()
+        ],
+
+        ignore_index=True,
+    )[
+        [
+            "ibge_municipality_code",
+            "municipality"          ,
+            "state"                 ,
+            "scenario"              ,
+
+            *MUNICIPAL_COUNT_COLUMNS,
+        ]
+    ]
+
+    validate_candidate_municipalities(result)
+
+    return result
+
+
+def validate_candidate_municipalities(frame: pd.DataFrame) -> None:
+    """Validate unique municipality/scenario pairs and their nested aggregate totals"""
+
+    required = {
+        "ibge_municipality_code",
+        "municipality"          ,
+        "state"                 ,
+        "scenario"              ,
+
+        *MUNICIPAL_COUNT_COLUMNS,
+    }
+
+    if required - set(frame.columns):
+        raise ValueError(f"Missing municipal columns: {sorted(required - set(frame.columns))}")
+
+    if not frame["scenario"].isin(MUNICIPAL_SCENARIOS.values()).all():
+        raise ValueError("Municipal scenario must be broad, standard or restricted")
+
+    if frame.duplicated(["ibge_municipality_code", "scenario"]).any():
+        raise ValueError("Duplicate municipality/scenario pairs")
+
+    scenarios = {}
+    for scenario in MUNICIPAL_SCENARIOS.values():
+        municipal = frame.loc[frame["scenario"].eq(scenario)].drop(columns="scenario")
+
+        validate_municipalities(municipal)
+
+        scenarios[scenario] = municipal.set_index("ibge_municipality_code")
+
+    labels = frame.groupby("ibge_municipality_code")[["municipality", "state"]].nunique()
+    if labels.gt(1).any(axis=None):
+        raise ValueError("Municipality code maps to conflicting labels across scenarios")
+
+    for wider, narrower in (("broad", "standard"), ("standard", "restricted")):
+        parent, child = scenarios[wider], scenarios[narrower]
+
+        if not child.index.isin(parent.index).all():
+            raise ValueError(f"Municipal scenarios must be nested: {narrower} <= {wider}")
+
+        columns = list(MUNICIPAL_COUNT_COLUMNS)
+        if child[columns].gt(parent.loc[child.index, columns]).any(axis=None):
+            raise ValueError(f"Municipal counts exceed the wider scenario: {narrower}")
 
 
 def type_review(frame: pd.DataFrame) -> pd.DataFrame:
@@ -897,7 +980,7 @@ def read_candidate_establishments_csv(path: Path) -> pd.DataFrame:
 
 
 def read_municipalities_csv(path: Path) -> pd.DataFrame:
-    """Read final municipal CSV using textual identifiers and integer counts"""
+    """Read one scenario's municipal aggregate using textual identifiers"""
 
     frame = pd.read_csv(path, dtype="string", keep_default_na=False)
 
@@ -908,5 +991,21 @@ def read_municipalities_csv(path: Path) -> pd.DataFrame:
         frame[column] = nonnegative_integers(frame[column], column)
 
     validate_municipalities(frame)
+
+    return frame
+
+
+def read_candidate_municipalities_csv(path: Path) -> pd.DataFrame:
+    """Read the long municipal CSV with textual identifiers and integer counts"""
+
+    frame = pd.read_csv(path, dtype="string", keep_default_na=False)
+
+    for column in MUNICIPAL_COUNT_COLUMNS:
+        if column not in frame:
+            raise ValueError(f"Missing municipal count column: {column}")
+
+        frame[column] = nonnegative_integers(frame[column], column)
+
+    validate_candidate_municipalities(frame)
 
     return frame

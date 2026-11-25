@@ -552,14 +552,6 @@ def validate_establishments(frame: pd.DataFrame) -> None:
             raise ValueError(f"Derived flag disagrees with recorded attributes: {column}")
 
 
-def aggregate_municipalities(candidates: pd.DataFrame) -> pd.DataFrame:
-    """One row per municipality, preserving the original aggregate attributes"""
-
-    validate_establishments(candidates)
-
-    return _aggregate_municipalities(candidates)
-
-
 def _aggregate_municipalities(candidates: pd.DataFrame) -> pd.DataFrame:
     """Aggregate candidates whose establishment contract has already been checked"""
 

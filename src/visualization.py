@@ -7,7 +7,6 @@ import json
 import hashlib
 
 from pathlib        import Path
-from urllib.error   import URLError
 from urllib.request import Request , urlopen
 from datetime       import datetime, timezone
 from tempfile       import NamedTemporaryFile
@@ -134,7 +133,7 @@ def load_geographic_meshes(root: Path, timeout: float = 120) -> tuple:
             try:
                 with urlopen(request, timeout=timeout) as response:
                     raw = response.read()
-            except (URLError, TimeoutError, OSError) as error:
+            except OSError as error:
                 raise RuntimeError(f"Could not retrieve IBGE {level} mesh: {url}: {error}") from error
 
             mesh = _parse_mesh(raw, level)
@@ -219,13 +218,13 @@ def build_candidate_maps(
     municipalities_by_level : dict[str, pd.DataFrame],
     boundaries              : gpd.GeoDataFrame,
     states                  : gpd.GeoDataFrame,
-) -> dict:
-    """Create three equal-scale maps, each with one fixed-size point per municipality"""
+) -> tuple[dict, pd.DataFrame]:
+    """Return three municipal presence maps and their geographic validation report"""
 
     if set(municipalities_by_level) != set(LEVELS):
         raise ValueError("Maps require broad, candidates and restricted municipal tables.")
 
-    validate_geographic_coverage(boundaries, municipalities_by_level)
+    geographic_checks = validate_geographic_coverage(boundaries, municipalities_by_level)
 
     if states.crs != MAP_CRS:
         raise ValueError("State mesh must use EPSG:5880.")
@@ -317,7 +316,7 @@ def build_candidate_maps(
 
             figures[level] = figure
 
-    return figures
+    return figures, geographic_checks
 
 
 def export_candidate_maps(figures: dict, docs_dir: Path) -> dict[str, Path]:

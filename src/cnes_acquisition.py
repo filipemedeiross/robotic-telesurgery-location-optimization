@@ -70,10 +70,6 @@ def write_json(payload: dict, destination: Path) -> None:
             encoding="utf-8",
         )
 
-        json.loads(
-            temporary.read_text(encoding="utf-8")
-        )
-
         temporary.replace(destination)
 
 

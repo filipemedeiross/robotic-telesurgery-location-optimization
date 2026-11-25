@@ -84,9 +84,6 @@ def _parse_mesh(raw: bytes, level: str) -> gpd.GeoDataFrame:
     if set(mesh.index.str[:2]) != STATE_CODES:
         raise ValueError("IBGE mesh does not cover the 27 federative units.")
 
-    if level == "UF" and len(mesh) != 27:
-        raise ValueError("IBGE state mesh must contain exactly 27 features.")
-
     if level == "municipio" and len(mesh) < 5_500:
         raise ValueError("IBGE municipal mesh has incomplete national coverage.")
 

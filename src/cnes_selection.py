@@ -425,9 +425,8 @@ def build_establishments(
     ).merge(
         reference,
 
-        on      ="CODUFMUN"   ,
-        how     ="left"       ,
-        validate="many_to_one",
+        on ="CODUFMUN",
+        how="left"    ,
     )
 
     if result["ibge_municipality_code"].isna().any():

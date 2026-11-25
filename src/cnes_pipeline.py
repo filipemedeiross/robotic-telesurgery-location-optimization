@@ -278,10 +278,6 @@ def _publish_products(root: Path, screen: Screen, provenance: dict, metadata: di
                 encoding="utf-8",
             )
 
-            json.loads(
-                temporary.read_text(encoding="utf-8")
-            )
-
             staged[destination] = temporary
 
         for destination, temporary in staged.items():

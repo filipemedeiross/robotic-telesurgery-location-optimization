@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "competence": "202606",
+  "references": {
+    "type_labels": "https://tabnet.datasus.gov.br/cgi/cnes/tipo_estabelecimento.htm",
+    "official_type_domain": "ftp://ftp.datasus.gov.br/dissemin/publicos/CNES/200508_/Auxiliar/TAB_CNES.zip (TP_ESTAB.CNV)"
+  },
+  "source": "Cadastro Nacional de Estabelecimentos de Saúde (CNES/DATASUS), arquivos ST/LT/SR",
+  "created_at_utc": "2026-11-25T01:27:33.104885+00:00",
+  "criteria": {
+    "lists": {
+      "broad": "Tipos legados CNES TP_UNID 05 e 07; sem exigência de infraestrutura.",
+      "candidates": "Conjunto amplo com GESPRG6E=1 ou GESPRG6M=1 (alta complexidade hospitalar).",
+      "restricted": "Conjunto padrão que satisfaz todos os critérios observáveis ST/LT/SR."
+    },
+    "restricted_observable_checks": [
+      {
+        "description": "Legacy type: general or specialized hospital",
+        "column": "is_legacy_hospital_type"
+      },
+      {
+        "description": "Registered high-complexity hospital care",
+        "column": "has_hospital_high_complexity"
+      },
+      {
+        "description": "Registered hospital care",
+        "column": "has_hospital_care"
+      },
+      {
+        "description": "Registered hospital beds",
+        "column": "has_hospital_beds"
+      },
+      {
+        "description": "Registered surgical center",
+        "column": "has_surgical_center"
+      },
+      {
+        "description": "At least one operating room",
+        "column": "has_operating_room"
+      },
+      {
+        "description": "At least one recovery room",
+        "column": "has_recovery_room"
+      },
+      {
+        "description": "At least one surgical bed",
+        "column": "has_surgical_beds"
+      },
+      {
+        "description": "At least one adult ICU bed",
+        "column": "has_adult_icu"
+      },
+      {
+        "description": "Hospital-linked diagnostic imaging",
+        "column": "has_hospital_diagnostic_imaging_service"
+      },
+      {
+        "description": "Hospital-linked clinical laboratory",
+        "column": "has_hospital_clinical_laboratory_service"
+      },
+      {
+        "description": "Hospital-linked hemotherapy",
+        "column": "has_hospital_hemotherapy_service"
+      }
+    ],
+    "adult_icu_bed_codes": [
+      "61",
+      "74",
+      "75",
+      "76"
+    ],
+    "hospital_service_codes": {
+      "121": "Diagnóstico por imagem",
+      "145": "Laboratório clínico",
+      "128": "Hemoterapia"
+    },
+    "hospital_service_link": "HOSP_NSUS=1 ou HOSP_SUS=1; registros apenas ambulatoriais não satisfazem o critério.",
+    "informational_only": [
+      "is_sus_linked",
+      "has_hospital_urology_service",
+      "has_hospital_videolaparoscopy_service"
+    ]
+  },
+  "column_dictionary": {
+    "cnes": "Identificador textual do estabelecimento CNES, 7 dígitos.",
+    "ibge_municipality_code": "Código municipal IBGE textual, 7 dígitos, correspondido pelo prefixo DATASUS de 6 dígitos.",
+    "municipality": "Nome municipal na referência IBGE utilizada.",
+    "state": "Sigla da unidade da federação, consistente com o prefixo IBGE.",
+    "legacy_establishment_type_code": "Tipo legado TP_UNID, texto com 2 dígitos; descrições no dicionário de tipos.",
+    "is_sus_linked": "VINC_SUS=1; informativo, não elimina candidatos.",
+    "has_hospital_high_complexity": "GESPRG6E=1 ou GESPRG6M=1; seleção do padrão e restrito.",
+    "has_hospital_beds": "LEITHOSP=1; seleção do restrito.",
+    "surgical_beds": "QTLEITP1: quantidade de leitos cirúrgicos, inteiro não negativo.",
+    "has_hospital_care": "ATENDHOS=1; seleção do restrito.",
+    "has_surgical_center": "CENTRCIR=1; seleção do restrito.",
+    "operating_rooms": "QTINST31: salas cirúrgicas; soma por município nas agregações.",
+    "recovery_rooms": "QTINST32: salas de recuperação, inteiro não negativo.",
+    "adult_icu_beds": "Soma QT_EXIST dos códigos LT 61,74,75,76; soma por município nas agregações.",
+    "is_legacy_hospital_type": "TP_UNID em 05,07; seleção do amplo, padrão e restrito.",
+    "has_surgical_beds": "surgical_beds > 0; seleção do restrito.",
+    "has_operating_room": "operating_rooms > 0; seleção do restrito.",
+    "has_recovery_room": "recovery_rooms > 0; seleção do restrito.",
+    "has_adult_icu": "adult_icu_beds > 0; seleção do restrito.",
+    "passes_cnes_telesurgery_host_screen": "Conjunção dos 12 critérios observáveis; não comprova aptidão operacional.",
+    "candidate_establishments": "Quantidade de estabelecimentos distintos da respectiva lista no município.",
+    "sus_linked_establishments": "Quantidade dos candidatos do município com VINC_SUS=1; informativo.",
+    "has_hospital_diagnostic_imaging_service": "SERV_ESP=121 e (HOSP_NSUS=1 ou HOSP_SUS=1); seleção do restrito.",
+    "has_hospital_hemotherapy_service": "SERV_ESP=128 e (HOSP_NSUS=1 ou HOSP_SUS=1); seleção do restrito.",
+    "has_hospital_clinical_laboratory_service": "SERV_ESP=145 e (HOSP_NSUS=1 ou HOSP_SUS=1); seleção do restrito.",
+    "has_hospital_urology_service": "SERV_ESP=169 e (HOSP_NSUS=1 ou HOSP_SUS=1); informativo, não elimina candidatos.",
+    "has_hospital_videolaparoscopy_service": "SERV_ESP=146 e (HOSP_NSUS=1 ou HOSP_SUS=1); informativo, não elimina candidatos."
+  },
+  "legacy_establishment_type_labels": {
+    "05": "Hospital Geral",
+    "07": "Hospital Especializado"
+  },
+  "counts": {
+    "base": {
+      "establishments": 490186,
+      "municipalities": 5571
+    },
+    "broad": {
+      "establishments": 6610,
+      "municipalities": 3148
+    },
+    "candidates": {
+      "establishments": 2255,
+      "municipalities": 670
+    },
+    "restricted": {
+      "establishments": 606,
+      "municipalities": 299
+    }
+  },
+  "outputs": {
+    "establishments": {
+      "broad": "data/cnes_telesurgery_host_candidates_broad_brazil_202606.csv",
+      "candidates": "data/cnes_telesurgery_host_candidates_brazil_202606.csv",
+      "restricted": "data/cnes_telesurgery_host_candidates_restricted_brazil_202606.csv"
+    },
+    "municipalities": {
+      "broad": "data/cnes_telesurgery_candidate_municipalities_broad_brazil_202606.csv",
+      "candidates": "data/cnes_telesurgery_candidate_municipalities_brazil_202606.csv",
+      "restricted": "data/cnes_telesurgery_candidate_municipalities_restricted_brazil_202606.csv"
+    },
+    "report": "reports/cnes_candidates_202606.html"
+  }
+}

@@ -191,7 +191,7 @@ def build_metadata(root: Path, screen: Screen) -> dict:
                 )
             },
 
-            "report" : f"reports/cnes_candidates_{COMPETENCE}.html",
+            "report" : "reports/cnes_candidates.html",
         },
     }
 

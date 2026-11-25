@@ -6,7 +6,7 @@
     "official_type_domain": "ftp://ftp.datasus.gov.br/dissemin/publicos/CNES/200508_/Auxiliar/TAB_CNES.zip (TP_ESTAB.CNV)"
   },
   "source": "Cadastro Nacional de Estabelecimentos de Saúde (CNES/DATASUS), arquivos ST/LT/SR",
-  "created_at_utc": "2026-11-25T14:31:47.951169+00:00",
+  "created_at_utc": "2026-11-25T14:42:36.420027+00:00",
   "criteria": {
     "lists": {
       "broad": "Tipos legados CNES TP_UNID 05 e 07; sem exigência de infraestrutura.",
@@ -143,6 +143,6 @@
       "candidates": "data/cnes_telesurgery_candidate_municipalities_brazil_202606.csv",
       "restricted": "data/cnes_telesurgery_candidate_municipalities_restricted_brazil_202606.csv"
     },
-    "report": "reports/cnes_candidates_202606.html"
+    "report": "reports/cnes_candidates.html"
   }
 }

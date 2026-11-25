@@ -42,12 +42,12 @@ def _():
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
 
+
     from src.cnes_pipeline import run_screen
     from src.visualization import (
-        build_candidate_maps        ,
-        export_candidate_maps       ,
-        load_geographic_meshes      ,
-        validate_geographic_coverage,
+        build_candidate_maps  ,
+        export_candidate_maps ,
+        load_geographic_meshes,
     )
 
     timeout_seconds = 90
@@ -61,7 +61,6 @@ def _():
         root,
         run_screen,
         timeout_seconds,
-        validate_geographic_coverage,
     )
 
 
@@ -203,12 +202,10 @@ def _(
     root,
     screen,
     timeout_seconds,
-    validate_geographic_coverage,
 ):
     boundaries, states, _geography_provenance = load_geographic_meshes(root, timeout_seconds)
 
-    geographic_checks = validate_geographic_coverage(boundaries           , screen.municipalities)
-    figures           = build_candidate_maps        (screen.municipalities, boundaries, states   )
+    figures, geographic_checks = build_candidate_maps(screen.municipalities, boundaries, states)
 
     export_candidate_maps(figures, root / "docs")
     return figures, geographic_checks
@@ -251,7 +248,7 @@ def _(mo):
     mo.md(r"""
     The six final CSV files are saved in `data/`: three establishment candidate lists and three municipal aggregates. The complete enriched base is saved exclusively at `.cache/cnes/202606/cnes_establishments_brazil_202606.csv`, which Git ignores.
 
-    The reference period appears in filenames and in `metadata/cnes_candidates_202606.json`, which contains the source, criteria, column dictionary, descriptions of types 05 and 07, counts and final output paths. The three maps are saved exclusively as PDFs in `docs/`, with embedded TrueType fonts and tight bounding boxes.
+    The reference period appears in the CSV filenames and inside `metadata/cnes_candidates.json`, which contains the source, criteria, column dictionary, descriptions of types 05 and 07, counts and final output paths. The three maps are saved exclusively as PDFs in `docs/`, with embedded TrueType fonts and tight bounding boxes.
     """)
     return
 

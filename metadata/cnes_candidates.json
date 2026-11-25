@@ -6,7 +6,7 @@
     "official_type_domain": "ftp://ftp.datasus.gov.br/dissemin/publicos/CNES/200508_/Auxiliar/TAB_CNES.zip (TP_ESTAB.CNV)"
   },
   "source": "Cadastro Nacional de Estabelecimentos de Saúde (CNES/DATASUS), arquivos ST/LT/SR",
-  "created_at_utc": "2026-11-25T14:16:08.686489+00:00",
+  "created_at_utc": "2026-11-25T14:31:47.951169+00:00",
   "criteria": {
     "lists": {
       "broad": "Tipos legados CNES TP_UNID 05 e 07; sem exigência de infraestrutura.",

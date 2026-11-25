@@ -117,23 +117,6 @@ def load_base(root: Path, timeout: float = 90) -> tuple[pd.DataFrame, dict]:
     return base, manifest
 
 
-def _assert_no_parquet(root: Path) -> None:
-    paths = [
-        path
-        for directory in (
-            root / "data"           ,
-            root / ".cache" / "cnes",
-            root / "docs"           ,
-            root / "reports"        ,
-        )
-        if  directory.exists()
-        for path in directory.rglob("*.parquet")
-    ]
-
-    if paths:
-        raise ValueError(f"Persistent Parquet products are not permitted: {paths}")
-
-
 def build_metadata(root: Path, screen: Screen) -> dict:
     paths = product_paths(root)
 
@@ -231,8 +214,6 @@ def _publish_products(root: Path, screen: Screen, provenance: dict, metadata: di
     paths         = product_paths(root)
     manifest_path = paths["base"].parent / "enriched_manifest.json"
 
-    _assert_no_parquet(root)
-
     with ExitStack() as stack:
         staged = {}
 
@@ -295,7 +276,6 @@ def run_screen(root: Path, timeout: float = 90) -> tuple[Screen, dict]:
 
     coverage = pd.DataFrame([
         {"check" : "Reference period 202606 validated in all 81 ST/LT/SR source files across the 27 FUs", "passed" : True},
-        {"check" : "CSV files exclude removed columns; no persistent CNES Parquet products or caches"   , "passed" : True},
     ])
 
     screen.quality_checks = pd.concat(

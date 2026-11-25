@@ -56,7 +56,7 @@ def product_paths(root: Path) -> dict:
         paths["municipalities"][level] = root / "data" / f"cnes_telesurgery_candidate_municipalities{suffix}_brazil_{COMPETENCE}.csv"
 
     paths["base"    ] = root / ".cache"   / "cnes" / COMPETENCE / f"cnes_establishments_brazil_{COMPETENCE}.csv"
-    paths["metadata"] = root / "metadata" / f"cnes_candidates_{COMPETENCE}.json"
+    paths["metadata"] = root / "metadata" / "cnes_candidates.json"
 
     return paths
 

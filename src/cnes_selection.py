@@ -323,9 +323,13 @@ def validate_source_competence(
 
 
 def _derived_flags(frame: pd.DataFrame) -> pd.DataFrame:
-    result = frame.copy()
+    return frame.assign(**_expected_flags(frame))
 
-    result["is_legacy_hospital_type"] = result["legacy_establishment_type_code"].isin(LEGACY_HOSPITAL_TYPE_CODES)
+
+def _expected_flags(frame: pd.DataFrame) -> dict[str, pd.Series]:
+    flags = {
+        "is_legacy_hospital_type" : frame["legacy_establishment_type_code"].isin(LEGACY_HOSPITAL_TYPE_CODES),
+    }
 
     for count, flag in (
         ("surgical_beds"  , "has_surgical_beds" ),
@@ -333,16 +337,22 @@ def _derived_flags(frame: pd.DataFrame) -> pd.DataFrame:
         ("recovery_rooms" , "has_recovery_room" ),
         ("adult_icu_beds" , "has_adult_icu"     ),
     ):
-        result[flag] = result[count].gt(0)
+        flags[flag] = frame[count].gt(0)
 
-    result["passes_cnes_telesurgery_host_screen"] = result[
-        [
-            column
+    flags["passes_cnes_telesurgery_host_screen"] = pd.DataFrame(
+        {
+            column : (
+                flags[column]
+                if   column in flags
+                else frame[column]
+            )
             for _, column in ELIGIBILITY_CHECKS
-        ]
-    ].all(axis=1)
+        },
 
-    return result
+        index=frame.index,
+    ).all(axis=1)
+
+    return flags
 
 
 def build_establishments(
@@ -538,16 +548,8 @@ def validate_establishments(frame: pd.DataFrame) -> None:
     if labels.gt(1).any(axis=None):
         raise ValueError("Municipality code maps to conflicting labels")
 
-    derived = _derived_flags(frame)
-    for column in (
-        "is_legacy_hospital_type"            ,
-        "has_surgical_beds"                  ,
-        "has_operating_room"                 ,
-        "has_recovery_room"                  ,
-        "has_adult_icu"                      ,
-        "passes_cnes_telesurgery_host_screen",
-    ):
-        if not frame[column].eq(derived[column]).all():
+    for column, expected in _expected_flags(frame).items():
+        if not frame[column].eq(expected).all():
             raise ValueError(f"Derived flag disagrees with recorded attributes: {column}")
 
 

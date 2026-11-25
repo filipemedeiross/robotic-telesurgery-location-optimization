@@ -286,11 +286,13 @@ def acquire_groups(root: Path, timeout: float = 90) -> tuple[dict[str, pd.DataFr
         for index, source in enumerate(sources, 1):
             path = cache / "dbc" / source["file"]
 
-            compatible = (
-                path.exists()                                 and
-                path  .stat().st_size == source["size_bytes"] and
-                source.get ("sha256") == sha256(path)
+            digest = (
+                sha256(path)
+                if   path.exists() and path.stat().st_size == source["size_bytes"]
+                else None
             )
+
+            compatible = digest is not None and digest == source.get("sha256")
 
             print(f"[{index:02d}/81] {source['file']}: {'cache' if compatible else 'DATASUS'}", flush=True)
 
@@ -324,11 +326,13 @@ def acquire_groups(root: Path, timeout: float = 90) -> tuple[dict[str, pd.DataFr
                         ftp = None
                         if attempt == 1:
                             raise RuntimeError(f"Failed to retrieve {source['url']}: {error}") from error
+
+                digest = sha256(path)
             else:
                 frame = read_dbc(path, source["group"], source["state"])
 
             source.update(
-                sha256              =sha256(path ),
+                sha256              =digest       ,
                 rows                =len   (frame),
                 validated_competence=COMPETENCE   ,
             )

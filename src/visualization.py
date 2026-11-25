@@ -9,19 +9,18 @@ import hashlib
 from pathlib        import Path
 from urllib.request import Request , urlopen
 from datetime       import datetime, timezone
-from tempfile       import NamedTemporaryFile
 
 import pandas            as pd
 import geopandas         as gpd
 import matplotlib.pyplot as plt
 
+from .utils          import staged_path
+from .cnes_selection import COMPETENCE, STATE_BY_PREFIX
 
-COMPETENCE = "202606"
-MAP_CRS    = "EPSG:5880"
 
-STATE_CODES = frozenset(
-    "11 12 13 14 15 16 17 21 22 23 24 25 26 27 28 29 31 32 33 35 41 42 43 50 51 52 53".split()
-)
+MAP_CRS = "EPSG:5880"
+
+STATE_CODES = frozenset(STATE_BY_PREFIX)
 
 LEVELS = {
     "broad"      : ("Broad"     , "Legacy types 05 and 07"                                              , "#0072B2"),
@@ -138,18 +137,9 @@ def load_geographic_meshes(root: Path, timeout: float = 120) -> tuple:
 
             mesh = _parse_mesh(raw, level)
 
-            with NamedTemporaryFile(
-                dir   =cache          ,
-                prefix=f".{filename}.",
-                delete=False          ,
-            ) as temporary:
-                staged = Path(temporary.name)
-
-                temporary.write  (raw )
-            try:
-                staged   .replace(path)
-            finally:
-                staged.unlink(missing_ok=True)
+            with staged_path(path) as temporary:
+                temporary.write_bytes(raw )
+                temporary.replace    (path)
 
         meshes    [level] = mesh
         provenance[level] = {
@@ -336,9 +326,7 @@ def export_candidate_maps(figures: dict, docs_dir: Path) -> dict[str, Path]:
             suffix = "" if level == "candidates" else f"_{level}"
             path   = docs_dir / f"cnes_telesurgery_candidate_municipalities{suffix}_brazil_{COMPETENCE}_map.pdf"
 
-            with NamedTemporaryFile(dir=docs_dir, prefix=f".{path.stem}.", suffix=".tmp", delete=False) as temporary:
-                staged = Path(temporary.name)
-            try:
+            with staged_path(path) as staged:
                 figure.savefig(
                     staged,
 
@@ -355,8 +343,6 @@ def export_candidate_maps(figures: dict, docs_dir: Path) -> dict[str, Path]:
                     raise ValueError(f"Invalid PDF export: {path}")
 
                 staged.replace(path)
-            finally:
-                staged.unlink (missing_ok=True)
 
             plt.close(figure)
 

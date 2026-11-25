@@ -7,16 +7,16 @@ import hashlib
 
 import pandas as pd
 
-from pathlib        import Path
-from contextlib     import contextmanager
-from urllib.request import Request           , urlopen
-from datetime       import datetime          , timezone
-from ftplib         import FTP               , all_errors
-from tempfile       import NamedTemporaryFile, TemporaryDirectory
+from urllib.request import Request , urlopen
+from datetime       import datetime, timezone
+from ftplib         import FTP     , all_errors
 
 from dbfread   import DBF
+from pathlib   import Path
 from pyreaddbc import dbc2dbf
+from tempfile  import TemporaryDirectory
 
+from .utils          import staged_path
 from .cnes_selection import (
     COMPETENCE,
     STATES    ,
@@ -34,27 +34,6 @@ MUNICIPALITIES_URL = "https://servicodados.ibge.gov.br/api/v1/localidades/munici
 def sha256(path: Path) -> str:
     with Path(path).open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
-
-
-@contextmanager
-def staged_path(destination: Path):
-    """Stage beside the destination to allow an atomic replacement"""
-
-    destination = Path(destination)
-
-    destination.parent.mkdir(parents=True, exist_ok=True)
-
-    with NamedTemporaryFile(
-        dir   =    destination.parent ,
-        prefix=f".{destination.name}.",
-        suffix=".tmp",
-        delete=False ,
-    ) as stream:
-        temporary = Path(stream.name)
-    try:
-        yield temporary
-    finally:
-        temporary.unlink(missing_ok=True)
 
 
 def write_json(payload: dict, destination: Path) -> None:

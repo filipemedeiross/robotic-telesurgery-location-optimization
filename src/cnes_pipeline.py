@@ -10,6 +10,7 @@ from pathlib    import Path
 from contextlib import ExitStack
 from datetime   import datetime, timezone
 
+from .utils            import staged_path
 from .cnes_acquisition import (
     COMPETENCE,
     STATES    ,
@@ -17,7 +18,6 @@ from .cnes_acquisition import (
     acquire_groups       ,
     load_municipalities  ,
     sha256               ,
-    staged_path          ,
     validate_source_proof,
 )
 from .cnes_selection import (

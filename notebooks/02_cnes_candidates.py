@@ -246,7 +246,9 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    The six final CSV files are saved in `data/`: three establishment candidate lists and three municipal aggregates. The complete enriched base is saved exclusively at `.cache/cnes/202606/cnes_establishments_brazil_202606.csv`, which Git ignores.
+    The two final CSV files are saved in `data/`: one consolidated establishment table and one municipal aggregate table. The establishment file, `cnes_telesurgery_host_candidates_brazil_202606.csv`, contains one row per broad candidate, with boolean columns `is_standard_candidate` and `is_restricted_candidate`. Restricted candidates have both flags set to `True`; rows with both flags set to `False` belong only to the broad scenario.
+
+    The municipal file, `cnes_telesurgery_candidate_municipalities_brazil_202606.csv`, uses long format: one row per existing municipality and scenario, identified by `ibge_municipality_code` and `scenario`. Scenario values are `broad`, `standard` and `restricted`. The four metrics, `candidate_establishments`, `sus_linked_establishments`, `operating_rooms` and `adult_icu_beds`, retain their respective scenario totals. The file contains 4,117 rows across 3,148 distinct municipalities: 3,148 broad, 670 standard and 299 restricted. A municipality may appear in multiple scenarios; combinations without candidates are omitted.
 
     The reference period appears in the CSV filenames and inside `metadata/cnes_candidates.json`, which contains the source, criteria, column dictionary, descriptions of types 05 and 07, counts and final output paths. The three maps are saved exclusively as PDFs in `docs/`, with embedded TrueType fonts and tight bounding boxes.
     """)

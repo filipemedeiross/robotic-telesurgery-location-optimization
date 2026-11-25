@@ -1,17 +1,32 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "competence": "202606",
   "references": {
     "type_labels": "https://tabnet.datasus.gov.br/cgi/cnes/tipo_estabelecimento.htm",
     "official_type_domain": "ftp://ftp.datasus.gov.br/dissemin/publicos/CNES/200508_/Auxiliar/TAB_CNES.zip (TP_ESTAB.CNV)"
   },
   "source": "Cadastro Nacional de Estabelecimentos de Saúde (CNES/DATASUS), arquivos ST/LT/SR",
-  "created_at_utc": "2026-11-25T14:42:36.420027+00:00",
+  "created_at_utc": "2026-11-25T16:51:49.404766+00:00",
   "criteria": {
     "lists": {
       "broad": "Tipos legados CNES TP_UNID 05 e 07; sem exigência de infraestrutura.",
       "candidates": "Conjunto amplo com GESPRG6E=1 ou GESPRG6M=1 (alta complexidade hospitalar).",
       "restricted": "Conjunto padrão que satisfaz todos os critérios observáveis ST/LT/SR."
+    },
+    "establishment_scenarios": {
+      "broad": "Todas as linhas do arquivo único de estabelecimentos.",
+      "candidates": "is_standard_candidate=True; inclui os estabelecimentos restritos.",
+      "restricted": "is_restricted_candidate=True; implica is_standard_candidate=True.",
+      "broad_only": "is_standard_candidate=False e is_restricted_candidate=False."
+    },
+    "municipality_scenarios": {
+      "column": "scenario",
+      "values": {
+        "broad": "Tipos legados CNES TP_UNID 05 e 07; sem exigência de infraestrutura.",
+        "standard": "Conjunto amplo com GESPRG6E=1 ou GESPRG6M=1 (alta complexidade hospitalar).",
+        "restricted": "Conjunto padrão que satisfaz todos os critérios observáveis ST/LT/SR."
+      },
+      "rows": "Uma linha por município e cenário com candidatos; combinações sem candidatos não são incluídas."
     },
     "restricted_observable_checks": [
       {
@@ -86,6 +101,7 @@
     "ibge_municipality_code": "Código municipal IBGE textual, 7 dígitos, correspondido pelo prefixo DATASUS de 6 dígitos.",
     "municipality": "Nome municipal na referência IBGE utilizada.",
     "state": "Sigla da unidade da federação, consistente com o prefixo IBGE.",
+    "scenario": "Cenário do agregado municipal: broad (amplo), standard (padrão) ou restricted (restrito).",
     "legacy_establishment_type_code": "Tipo legado TP_UNID, texto com 2 dígitos; descrições no dicionário de tipos.",
     "is_sus_linked": "VINC_SUS=1; informativo, não elimina candidatos.",
     "has_hospital_high_complexity": "GESPRG6E=1 ou GESPRG6M=1; seleção do padrão e restrito.",
@@ -96,12 +112,9 @@
     "operating_rooms": "QTINST31: salas cirúrgicas; soma por município nas agregações.",
     "recovery_rooms": "QTINST32: salas de recuperação, inteiro não negativo.",
     "adult_icu_beds": "Soma QT_EXIST dos códigos LT 61,74,75,76; soma por município nas agregações.",
-    "is_legacy_hospital_type": "TP_UNID em 05,07; seleção do amplo, padrão e restrito.",
-    "has_surgical_beds": "surgical_beds > 0; seleção do restrito.",
-    "has_operating_room": "operating_rooms > 0; seleção do restrito.",
-    "has_recovery_room": "recovery_rooms > 0; seleção do restrito.",
-    "has_adult_icu": "adult_icu_beds > 0; seleção do restrito.",
     "passes_cnes_telesurgery_host_screen": "Conjunção dos 12 critérios observáveis; não comprova aptidão operacional.",
+    "is_standard_candidate": "Pertence ao cenário padrão; inclui todos os estabelecimentos do restrito.",
+    "is_restricted_candidate": "Pertence ao cenário restrito; implica is_standard_candidate=True.",
     "candidate_establishments": "Quantidade de estabelecimentos distintos da respectiva lista no município.",
     "sus_linked_establishments": "Quantidade dos candidatos do município com VINC_SUS=1; informativo.",
     "has_hospital_diagnostic_imaging_service": "SERV_ESP=121 e (HOSP_NSUS=1 ou HOSP_SUS=1); seleção do restrito.",
@@ -133,16 +146,8 @@
     }
   },
   "outputs": {
-    "establishments": {
-      "broad": "data/cnes_telesurgery_host_candidates_broad_brazil_202606.csv",
-      "candidates": "data/cnes_telesurgery_host_candidates_brazil_202606.csv",
-      "restricted": "data/cnes_telesurgery_host_candidates_restricted_brazil_202606.csv"
-    },
-    "municipalities": {
-      "broad": "data/cnes_telesurgery_candidate_municipalities_broad_brazil_202606.csv",
-      "candidates": "data/cnes_telesurgery_candidate_municipalities_brazil_202606.csv",
-      "restricted": "data/cnes_telesurgery_candidate_municipalities_restricted_brazil_202606.csv"
-    },
+    "establishments": "data/cnes_telesurgery_host_candidates_brazil_202606.csv",
+    "municipalities": "data/cnes_telesurgery_candidate_municipalities_brazil_202606.csv",
     "report": "reports/cnes_candidates.html"
   }
 }

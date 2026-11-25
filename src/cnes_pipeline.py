@@ -293,8 +293,8 @@ def run_screen(root: Path, timeout: float = 90) -> tuple[Screen, dict]:
     screen = screen_candidates(base)
 
     coverage = pd.DataFrame([
-        {"check" : "Competência 202606 validada internamente nas 81 fontes ST/LT/SR das 27 UFs"    , "passed" : True},
-        {"check" : "CSV sem colunas removidas; nenhum produto ou cache CNES persistente em Parquet", "passed" : True},
+        {"check" : "Reference period 202606 validated in all 81 ST/LT/SR source files across the 27 FUs", "passed" : True},
+        {"check" : "CSV files exclude removed columns; no persistent CNES Parquet products or caches"   , "passed" : True},
     ])
 
     screen.quality_checks = pd.concat(

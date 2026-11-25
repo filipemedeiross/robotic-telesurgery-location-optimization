@@ -89,6 +89,54 @@ LEGACY_TYPE_LABELS = {
 LEGACY_HOSPITAL_TYPE_CODES = frozenset({"05", "07"            })
 ADULT_ICU_BED_CODES        = frozenset({"61", "74", "75", "76"})
 
+LEGACY_TYPE_LABELS_EN = {
+    "01" : "Health post"                                                ,
+    "02" : "Health center / basic health unit"                          ,
+    "04" : "Polyclinic"                                                 ,
+    "05" : "General hospital"                                           ,
+    "07" : "Specialized hospital"                                       ,
+    "09" : "General hospital emergency department (legacy)"             ,
+    "12" : "Orthopedic trauma emergency department (legacy)"            ,
+    "15" : "Mixed care unit"                                            ,
+    "20" : "General emergency department"                               ,
+    "21" : "Specialized emergency department"                           ,
+    "22" : "Independent medical office"                                 ,
+    "32" : "Mobile river health unit"                                   ,
+    "36" : "Clinic / specialty center"                                  ,
+    "39" : "Standalone diagnostic and therapeutic support unit (SADT)"  ,
+    "40" : "Mobile ground health unit"                                  ,
+    "42" : "Mobile prehospital emergency care unit"                     ,
+    "43" : "Pharmacy"                                                   ,
+    "45" : "Family health unit"                                         ,
+    "50" : "Health surveillance unit"                                   ,
+    "60" : "Healthcare worker cooperative or staffing provider"         ,
+    "61" : "Standalone birth center"                                    ,
+    "62" : "Standalone day hospital"                                    ,
+    "63" : "Authorization unit"                                         ,
+    "64" : "Health services regulation center"                          ,
+    "65" : "Epidemiological surveillance unit (legacy)"                 ,
+    "66" : "Sanitary surveillance unit (legacy)"                        ,
+    "67" : "Central public health laboratory (LACEN)"                   ,
+    "68" : "Health management center"                                   ,
+    "69" : "Hemotherapy / hematology care center"                       ,
+    "70" : "Psychosocial care center"                                   ,
+    "71" : "Family health support center"                               ,
+    "72" : "Indigenous health care unit"                                ,
+    "73" : "Urgent care unit"                                           ,
+    "74" : "Health promotion and physical activity center"              ,
+    "75" : "Telehealth"                                                 ,
+    "76" : "Emergency medical regulation center"                        ,
+    "77" : "Standalone home care service"                               ,
+    "78" : "Residential care unit"                                      ,
+    "79" : "Orthotics and prosthetics workshop"                         ,
+    "80" : "Public health laboratory"                                   ,
+    "81" : "Access regulation center"                                   ,
+    "82" : "State organ notification, procurement and allocation center",
+    "83" : "Disease prevention and health promotion center"             ,
+    "84" : "Central supply facility"                                    ,
+    "85" : "Immunization center"                                        ,
+}
+
 SUPPORT_SERVICE_CODES = {
     "diagnostic_imaging"  : "121",
     "hemotherapy"         : "128",
@@ -118,18 +166,18 @@ SOURCE_COLUMNS = {
 }
 
 ELIGIBILITY_CHECKS = (
-    ("Tipo legado Hospital Geral ou Hospital Especializado", "is_legacy_hospital_type"                 ),
-    ("Alta complexidade hospitalar registrada"             , "has_hospital_high_complexity"            ),
-    ("Atendimento hospitalar registrado"                   , "has_hospital_care"                       ),
-    ("Leitos hospitalares registrados"                     , "has_hospital_beds"                       ),
-    ("Centro cirúrgico registrado"                         , "has_surgical_center"                     ),
-    ("Pelo menos uma sala cirúrgica"                       , "has_operating_room"                      ),
-    ("Pelo menos uma sala de recuperação"                  , "has_recovery_room"                       ),
-    ("Pelo menos um leito cirúrgico"                       , "has_surgical_beds"                       ),
-    ("Pelo menos um leito de UTI adulto"                   , "has_adult_icu"                           ),
-    ("Diagnóstico por imagem vinculado ao hospital"        , "has_hospital_diagnostic_imaging_service" ),
-    ("Laboratório clínico vinculado ao hospital"           , "has_hospital_clinical_laboratory_service"),
-    ("Hemoterapia vinculada ao hospital"                   , "has_hospital_hemotherapy_service"        ),
+    ("Legacy type: general or specialized hospital", "is_legacy_hospital_type"                 ),
+    ("Registered high-complexity hospital care"    , "has_hospital_high_complexity"            ),
+    ("Registered hospital care"                    , "has_hospital_care"                       ),
+    ("Registered hospital beds"                    , "has_hospital_beds"                       ),
+    ("Registered surgical center"                  , "has_surgical_center"                     ),
+    ("At least one operating room"                 , "has_operating_room"                      ),
+    ("At least one recovery room"                  , "has_recovery_room"                       ),
+    ("At least one surgical bed"                   , "has_surgical_beds"                       ),
+    ("At least one adult ICU bed"                  , "has_adult_icu"                           ),
+    ("Hospital-linked diagnostic imaging"          , "has_hospital_diagnostic_imaging_service" ),
+    ("Hospital-linked clinical laboratory"         , "has_hospital_clinical_laboratory_service"),
+    ("Hospital-linked hemotherapy"                 , "has_hospital_hemotherapy_service"        ),
 )
 LIST_DEFINITIONS = {
     "broad"      : "Tipos legados CNES TP_UNID 05 e 07; sem exigência de infraestrutura."       ,
@@ -589,18 +637,18 @@ def type_review(frame: pd.DataFrame) -> pd.DataFrame:
 
     return pd.DataFrame([
         {
-            "legacy_type_code"  : code                                                         ,
-            "legacy_type_label" : LEGACY_TYPE_LABELS.get(code, f"Tipo não catalogado ({code})"),
+            "legacy_type_code"  : code                                                          ,
+            "legacy_type_label" : LEGACY_TYPE_LABELS_EN.get(code, f"Uncatalogued type ({code})"),
 
             "type_screening_decision" : (
-                "candidato amplo"
+                "Broad candidate"
                 if   code in LEGACY_HOSPITAL_TYPE_CODES
-                else "excluído"
+                else "Excluded"
             ),
             "rationale"               : (
-                "Tipo hospitalar aceito; padrão exige alta complexidade e restrito exige todos os critérios observáveis."
+                "Eligible hospital type; the standard set requires high-complexity care and the restricted set requires all observable criteria."
                 if   code in LEGACY_HOSPITAL_TYPE_CODES
-                else "Tipo legado fora de 05/07; não atende à definição conservadora de hospital do conjunto amplo."
+                else "Legacy type outside 05/07; excluded from the broad set's conservative hospital definition."
             ),
 
             "observed_establishments" : int(counts.get(code, 0)),
@@ -629,7 +677,7 @@ def validate_products(
 
     rows = [
         {
-            "check"  : "Base: identificadores, contagens, atributos e municípios consistentes",
+            "check"  : "Base: consistent identifiers, counts, attributes and municipalities",
             "passed" : True,
         }
     ]
@@ -661,7 +709,7 @@ def validate_products(
 
         rows.append(
             {
-                "check"  : f"{level}: CNES únicos, seleção exata, subconjunto e totais municipais reconciliados",
+                "check"  : f"{level}: unique CNES identifiers, exact selection, nested subsets and reconciled municipal totals",
                 "passed" : True,
             }
         )
@@ -689,9 +737,9 @@ def screen_candidates(base: pd.DataFrame) -> Screen:
 
     funnel = [
         {
-            "step"                     : 0                          ,
-            "criterion"                : "Todos os estabelecimentos",
-            "remaining_establishments" : len(base)                  ,
+            "step"                     : 0                   ,
+            "criterion"                : "All establishments",
+            "remaining_establishments" : len(base)           ,
         }
     ]
 
